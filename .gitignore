@@ -1,0 +1,26 @@
+# Ignore large dataset zip files
+*.zip
+
+# Ignore the raw images dataset folder (too large for GitHub)
+Frost_images-20260709T051618Z-3-001/
+
+# Ignore papers and presentations in the root
+*.pdf
+*.pptx
+
+# Ignore WEEK 2 folder (unrelated coursework)
+WEEK 2/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# We DO want to commit:
+# - scripts/
+# - notebooks/
+# - config/
+# - paper_source/
