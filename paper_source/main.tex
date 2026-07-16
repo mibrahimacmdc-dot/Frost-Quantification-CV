@@ -10,6 +10,12 @@
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds}
 
 \begin{document}
+\raggedbottom
+\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\dblfloatpagefraction}{0.75}
+\renewcommand{\dbltopfraction}{0.9}
 \let\WriteBookmarks\relax
 \def\floatpagepagefraction{1}
 \def\textpagefraction{.001}
@@ -88,39 +94,23 @@ Using computer vision, \citet{aguiar2023local} addressed the issue of local fros
 The current literature highlights extensive research efforts in AI, CV, and sensing technologies for frost detection and prediction. However, most existing approaches either classify overall frost presence or provide frost thickness estimates at limited localized points on the evaporator without accurately capturing the real-time full spatial distribution of frost, particularly under non-uniform frost conditions in domestic refrigeration systems. Based on the literature review, there is a significant demand for a low-cost, high-accuracy, and computationally efficient system capable of real-time, comprehensive monitoring of frost thickness distribution across the entire evaporator surface, especially when frost deposition is non-uniform. Current systems face challenges such as incomplete spatial coverage, dependence on costly and complex hardware, or focus only on general frost severity rather than detailed spatial variations. Our proposed work aims to bridge these gaps by developing a computer vision-based approach that uses an RGB camera to detect and quantify non-uniform frost deposition on individual evaporator rods. This system will provide continuous measurements of frost thickness both horizontally and vertically, along with uncertainty estimation, enabling highly accurate and adaptive defrost scheduling for refrigeration systems.
 
 \section{Methodology}\label{sec:methodology}
-The proposed framework is designed to detect and quantify non-uniform frost accumulation by analyzing high-resolution visual data from a fixed-position RGB camera focused on the evaporator coils of a domestic refrigeration unit. To capture spatial variations effectively, the evaporator coil surface is discretely mapped into a structured Multi-Region of Interest (Multi-ROI) matrix. 
+The proposed framework uses a fixed-position RGB camera to monitor the evaporator coil of a domestic refrigeration unit under controlled ambient conditions. Rather than treating the coil as a single homogeneous surface, the coil is discretized into a matrix of $4 \times 5$ Regions of Interest (ROIs) spanning both the horizontal and vertical extent of the evaporator rods, with camera position, focal length, and illumination held constant to ensure consistent image acquisition throughout each frost accumulation cycle.
 
-\subsection{Data Acquisition and ROI Definition}
-Time-lapse images of frost accumulation were captured under controlled ambient conditions throughout various frosting cycles. To ensure consistent spatial reference, camera positioning, focal length, and illumination were held constant. A standard physical scale (a 30 cm ruler) was placed within the camera's field of view to facilitate geometric calibration. Based on the physical ruler, the pixel-to-millimeter ratio was established, yielding a constant calibration factor $k = 1/3.4$ mm/pixel (i.e., 3.4 pixels represent 1 mm in physical space). 
-
-Rather than analyzing the evaporator as a single homogeneous entity, the coil structure is divided into a $4 \times 5$ spatial grid. This division specifically targets the vertical fins across 4 horizontal rows and 5 vertical columns, generating 20 distinct ROIs. Horizontal connective tubes are excluded from the analysis to isolate the frost growth kinetics occurring specifically on the vertical heat-exchange fins. 
-
-\subsection{Ground Truth Annotation Pipeline}
-Accurate ground truth generation is critical for training the supervised learning model. An automated preprocessing pipeline was developed to expedite this process. For each frosting session, the baseline image (0 mm frost thickness) is subtracted from the progressively frosted images using absolute difference techniques. A binary threshold and morphological operations are applied to the resultant difference map to isolate initial candidate regions of frost. These candidate masks are subsequently refined manually to ensure precise pixel-wise boundaries of the frost layer. 
-
-For thickness quantification, the maximum horizontal spread of the frost across the vertical fins is measured in pixels within each of the 20 ROIs. This pixel count $P_{i,j}$ for the $i$-th row and $j$-th column ROI is then converted to a physical thickness measurement $T_{i,j}$ (in millimeters) using the geometric calibration factor:
+Each captured frame is preprocessed through geometric calibration, illumination normalization, and noise reduction, then cropped into the predefined ROI matrix. Frost boundaries within each ROI are segmented using a U-Net architecture with an EfficientNet-B3 encoder, and local frost thickness is estimated from the segmented mask using geometric mask analysis (calculating the maximum horizontal frost spread). Pixel-based measurements are converted to physical thickness using a calibration factor $k = 1/3.4$ mm/pixel, obtained from known-dimension reference markers (a 30 cm ruler) in the camera's field of view:
 \begin{equation}\label{eq:calib}
-T_{i,j} = \frac{P_{i,j}}{3.4} \quad (\text{mm}).
+T_{i,j} = k \cdot P_{i,j}.
 \end{equation}
 
-\subsection{Deep Learning Semantic Segmentation}
-To automate the detection of frost boundaries, a deep learning-based semantic segmentation architecture is employed. Specifically, a U-Net model enhanced with an EfficientNet-B3 encoder is utilized. The EfficientNet-B3 backbone, pre-trained on ImageNet, acts as a powerful feature extractor capable of discerning subtle textural and gradient variations associated with frost against metallic backgrounds. The model is configured for a binary classification task, assigning a single 'Frost' or 'Background' class to every pixel in the image.
+The resulting ROI-wise thickness values are assembled into a two-dimensional frost thickness map. Horizontal and vertical profiles are extracted by averaging $T_{i,j}$ along each axis, and a non-uniformity index (coefficient of variation of $T_{i,j}$) quantifies overall spatial unevenness at each time step. Per-ROI measurement uncertainty is estimated by repeating acquisition over $N$ independent trials under identical conditions and computing the standard deviation of the resulting estimates.
 
-\subsection{Thickness Quantification and Validation}
-Post-segmentation, the model-generated frost masks are subjected to the spatial ROI matrix. The algorithm programmatically scans each ROI, calculating the maximum contiguous horizontal frost pixels to derive the continuous thickness measurement $T_{i,j}$. 
-
-To capture spatial unevenness across the entire coil, a non-uniformity index (coefficient of variation of $T_{i,j}$ across all 20 ROIs) is computed at each time step. The predictive performance of the proposed methodology is evaluated against the manually annotated ground truth using several rigorous metrics:
-\begin{itemize}
-    \item \textbf{Segmentation Performance:} Evaluated using Intersection over Union (IoU) and Pixel Accuracy.
-    \item \textbf{Quantification Accuracy:} Evaluated using Mean Absolute Error (MAE), Root Mean Square Error (RMSE), and the Coefficient of Determination ($R^2$).
-\end{itemize}
+Model performance is validated against manually annotated ground-truth measurements using MAE, RMSE, $R^2$, and IoU, computed both globally and per-ROI to assess overall accuracy as well as consistency across spatial locations on the evaporator surface.
 
 \subsection{Flowchart}\label{sec:flowchart}
-Fig.~\ref{fig:flowchart} summarizes the end-to-end methodology described above, from image acquisition through deep learning segmentation to Multi-ROI spatial thickness mapping.
+Fig.~\ref{fig:flowchart} summarizes the end-to-end methodology described above, from image acquisition through ROI-wise frost thickness estimation to spatial mapping and validation.
 
 \begin{figure*}[t]
 \centering
-\resizebox{0.85\textwidth}{!}{%
+\resizebox{0.72\textwidth}{!}{%
 \begin{tikzpicture}[
   node distance=0.8cm and 1.2cm,
   font=\small,
@@ -129,31 +119,118 @@ Fig.~\ref{fig:flowchart} summarizes the end-to-end methodology described above, 
   decision/.style={diamond, draw=black, thick, fill=orange!12,
                    text width=3.4cm, minimum height=1.1cm, align=center, inner sep=2pt, aspect=2.2},
   io/.style={trapezium, draw=black, thick, fill=green!10, trapezium left angle=70,
-             trapezium right angle=110, text width=6.0cm, minimum height=1cm, align=center, inner sep=6pt},
+             trapezium right angle=110, text width=5.6cm, minimum height=1cm, align=center, inner sep=6pt},
   arr/.style={-{Stealth[length=2.5mm]}, thick}
 ]
 
-\node[io] (acq) {Image Acquisition\\(Time-lapse RGB Camera, Controlled Ambient)};
-\node[process, below=of acq] (roi) {ROI Grid Establishment\\(4x5 Matrix yielding 20 localized ROIs on vertical fins)};
-\node[process, below=of roi] (gt) {Ground Truth Generation\\(Image Subtraction $\rightarrow$ Binary Mask $\rightarrow$ ROI Thickness)};
-\node[process, below=of gt] (seg) {Deep Learning Segmentation\\(U-Net Architecture with EfficientNet-B3 Encoder)};
-\node[process, below=of seg] (thick) {Multi-ROI Thickness Extraction\\(Max horizontal frost spread per ROI)};
-\node[process, below=of thick] (calib) {Calibration and Conversion\\$T_{i,j} = P_{i,j} / 3.4$ mm};
-\node[process, below=of calib] (map) {2D Non-Uniformity Profiling\\(Spatial Frost Map and Non-Uniformity Index)};
-\node[io, below=of map] (out) {Performance Validation\\(MAE, RMSE, $R^2$, and IoU)};
+\node[io] (acq) {Image Acquisition\\(fixed RGB camera, controlled ambient conditions)};
+\node[process, below=of acq] (pre) {Preprocessing\\(geometric calibration, illumination normalization, noise reduction)};
+\node[process, below=of pre] (roi) {ROI Matrix Segmentation\\(crop frame into $4 \times 5$ ROI grid over evaporator rods)};
+\node[process, below=of roi] (seg) {Frost Boundary Segmentation per ROI\\(U-Net with EfficientNet-B3)};
+\node[process, below=of seg] (thick) {Local Frost Thickness Estimation\\(geometric mask analysis)};
+\node[process, below=of thick] (calib) {Pixel-to-Physical Conversion\\$T_{i,j} = k \cdot P_{i,j}$};
+\node[process, below=of calib] (map) {2D Frost Thickness Map Assembly\\(horizontal \& vertical profile extraction)};
+\node[process, below=of map] (nu) {Non-Uniformity \& Uncertainty Quantification\\(coefficient of variation; std.\ dev.\ over $N$ trials)};
+\node[decision, below=of nu] (valid) {Validated against\\ground truth?};
+\node[io, below=1.6cm of valid, text width=5.6cm] (out) {Output: Validated Frost Thickness Map\\(MAE, RMSE, $R^2$, IoU -- global \& per-ROI)};
+\node[process, right=2.2cm of nu, text width=3.6cm] (refine) {Refine Segmentation / Regression Model};
 
-\draw[arr] (acq) -- (roi);
-\draw[arr] (roi) -- (gt);
-\draw[arr] (gt) -- (seg);
+\draw[arr] (acq) -- (pre);
+\draw[arr] (pre) -- (roi);
+\draw[arr] (roi) -- (seg);
 \draw[arr] (seg) -- (thick);
 \draw[arr] (thick) -- (calib);
 \draw[arr] (calib) -- (map);
-\draw[arr] (map) -- (out);
+\draw[arr] (map) -- (nu);
+\draw[arr] (nu) -- (valid);
+\draw[arr] (valid) -- node[left, xshift=-2pt] {Yes} (out);
+\draw[arr] (valid) -- node[above, yshift=2pt] {No} (refine);
+\draw[arr] (refine) |- (seg.east);
 
 \end{tikzpicture}%
 }
-\caption{Flowchart of the proposed Multi-ROI computer vision framework utilizing U-Net for non-uniform frost thickness detection.}
+\caption{Flowchart of the proposed multi-ROI computer vision methodology for non-uniform frost thickness detection and spatial quantification on evaporator coils.}
 \label{fig:flowchart}
+\end{figure*}
+
+\subsection{Implementation Roadmap}\label{sec:roadmap}
+Fig.~\ref{fig:roadmap} outlines the five-phase development roadmap followed to implement the proposed methodology, spanning dataset preparation through final validation, along with the current completion status of each task.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  phase/.style={rectangle, rounded corners, draw=none, thick, minimum height=0.75cm,
+                text width=4.6cm, align=center, inner sep=5pt, text=white, font=\bfseries\small},
+  taskbox/.style={rectangle, rounded corners, draw=black!55, thick, minimum height=1.05cm,
+               text width=4.6cm, align=left, inner sep=6pt, font=\small},
+  donefill/.style={fill=green!12!white},
+  progressfill/.style={fill=orange!12!white},
+  todofill/.style={fill=black!5},
+  doneicon/.style={circle, draw=green!35!black, thick, fill=white, minimum size=0.42cm, font=\scriptsize},
+  progressicon/.style={circle, draw=orange!70!red, thick, fill=white, minimum size=0.42cm, font=\scriptsize},
+  todoicon/.style={circle, draw=black!45, thick, fill=white, minimum size=0.42cm, font=\scriptsize},
+  arr/.style={-{Stealth[length=2.2mm]}, thick, black!60},
+  col/.style={column sep=0.55cm}
+]
+
+% ---- Phase headers ----
+\node[phase, fill=green!45!black] (p1) at (0,0) {Phase 1\\Dataset Prep \& Exploration};
+\node[phase, fill=orange!75!red, right=0.55cm of p1] (p2) {Phase 2\\Ground Truth Annotation Pipeline};
+\node[phase, fill=black!55, right=0.55cm of p2] (p3) {Phase 3\\Model Training (Semantic Segmentation)};
+\node[phase, fill=black!55, right=0.55cm of p3] (p4) {Phase 4\\Frost Thickness Inference};
+\node[phase, fill=black!55, right=0.55cm of p4] (p5) {Phase 5\\Validation \& Results};
+
+\draw[arr] (p1) -- (p2);
+\draw[arr] (p2) -- (p3);
+\draw[arr] (p3) -- (p4);
+\draw[arr] (p4) -- (p5);
+
+% ---- Phase 1 steps (done) ----
+\node[taskbox, donefill, below=0.6cm of p1] (p1s1) {\tikz\node[doneicon]{\checkmark};~~Identify all folders \& folder structures};
+\node[taskbox, donefill, below=0.35cm of p1s1] (p1s2) {\tikz\node[doneicon]{\checkmark};~~Filter out the 2 outlier folders};
+\node[taskbox, donefill, below=0.35cm of p1s2] (p1s3) {\tikz\node[doneicon]{\checkmark};~~Establish calibration factor (3.4 px/mm)};
+\draw[arr] (p1) -- (p1s1);
+\draw[arr] (p1s1) -- (p1s2);
+\draw[arr] (p1s2) -- (p1s3);
+
+% ---- Phase 2 steps (done) ----
+\node[taskbox, donefill, below=0.6cm of p2] (p2s1) {\tikz\node[doneicon]{\checkmark};~~Write auto-annotation script (subtraction)};
+\node[taskbox, donefill, below=0.35cm of p2s1] (p2s2) {\tikz\node[doneicon]{\checkmark};~~Define fixed ROI bounding boxes};
+\node[taskbox, donefill, below=0.35cm of p2s2] (p2s3) {\tikz\node[doneicon]{\checkmark};~~Extract ground truth masks to mm};
+\draw[arr] (p2) -- (p2s1);
+\draw[arr] (p2s1) -- (p2s2);
+\draw[arr] (p2s2) -- (p2s3);
+
+% ---- Phase 3 steps (in progress / todo) ----
+\node[taskbox, progressfill, below=0.6cm of p3] (p3s1) {\tikz\node[progressicon]{\(\bullet\)};~~Create Colab notebook for 1-class segmentation};
+\node[taskbox, todofill, below=0.35cm of p3s1] (p3s2) {\tikz\node[todoicon]{};~~Train U-Net model on annotated dataset};
+\draw[arr] (p3) -- (p3s1);
+\draw[arr] (p3s1) -- (p3s2);
+
+% ---- Phase 4 steps (todo) ----
+\node[taskbox, todofill, below=0.6cm of p4] (p4s1) {\tikz\node[todoicon]{};~~Write inference pipeline: raw image $\to$ mask $\to$ thickness/ROI};
+\node[taskbox, todofill, below=0.35cm of p4s1] (p4s2) {\tikz\node[todoicon]{};~~Add visualization scripts (heatmaps, profiles)};
+\draw[arr] (p4) -- (p4s1);
+\draw[arr] (p4s1) -- (p4s2);
+
+% ---- Phase 5 steps (todo) ----
+\node[taskbox, todofill, below=0.6cm of p5] (p5s1) {\tikz\node[todoicon]{};~~Compute MAE, RMSE, $R^2$ against ground truth};
+\draw[arr] (p5) -- (p5s1);
+
+% ---- Legend ----
+\node[doneicon, below=1.0cm of p1s3.south west, anchor=west, xshift=0.15cm] (ld) {\checkmark};
+\node[right=0.15cm of ld, anchor=west] (ldtext) {Done -- 6 tasks complete};
+\node[progressicon, right=0.7cm of ldtext, anchor=west] (lp) {\(\bullet\)};
+\node[right=0.15cm of lp, anchor=west] (lptext) {In Progress -- 1 task underway};
+\node[todoicon, right=0.7cm of lptext, anchor=west] (lt) {};
+\node[right=0.15cm of lt, anchor=west] (lttext) {Not Started -- 4 tasks remaining};
+
+\end{tikzpicture}%
+}
+\caption{Five-phase implementation roadmap for the proposed frost thickness detection pipeline, from dataset preparation and ground truth annotation through U-Net-based semantic segmentation, inference, and final validation. Status markers indicate task completion at the time of writing.}
+\label{fig:roadmap}
 \end{figure*}
 
 \section{Results and Discussion}\label{sec:results}
